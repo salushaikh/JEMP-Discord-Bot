@@ -19,6 +19,7 @@ import { BrainstormStatus, OpportunityKind, ProjectRole, type PrismaClient } fro
 import type { Logger } from 'pino';
 import type { Env } from '../config/env.js';
 import { DomainError } from '../lib/errors.js';
+import { deploySlashCommands } from './deploy.js';
 import { applicationId, brainstormId, jempId, opportunityId, paymentId, projectId } from '../lib/ids.js';
 import { addApprovedApplication, applyMembershipRoles, memberForDiscord, recordArrival, requireActiveMember, revokeApplication, verifyApprovedEmail } from '../services/members.js';
 import { getGuildConfig, isAdmin, requireAdmin, requireChannel, seedGuildConfig, type EffectiveGuildConfig } from '../services/guild-config.js';
@@ -391,6 +392,17 @@ export function createBot(ctx: BotContext) {
   const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
   client.once(Events.ClientReady, async (ready) => {
     ctx.logger.info({ user: ready.user.tag }, 'JEMP bot ready');
+    try {
+      if (ctx.env.DISCORD_GUILD_ID) {
+        await deploySlashCommands(ctx.env, ctx.logger, ctx.env.DISCORD_GUILD_ID);
+      } else {
+        for (const guild of ready.guilds.cache.values()) {
+          await deploySlashCommands(ctx.env, ctx.logger, guild.id);
+        }
+      }
+    } catch (deployError) {
+      ctx.logger.warn({ err: deployError }, 'Automatic slash command deployment failed on bot ready');
+    }
     for (const guild of ready.guilds.cache.values()) {
       await seedGuildConfig(ctx.db, ctx.env, guild.id);
       postVerificationCard(client, ctx, guild.id).catch((error) => ctx.logger.warn({ err: error, guildId: guild.id }, 'could not post verification card'));

@@ -6,6 +6,7 @@ import { isDatabaseConfigured, isDiscordConfigured, type Env } from '../config/e
 import { constantTimeEquals, signBody } from '../lib/crypto.js';
 import { DomainError } from '../lib/errors.js';
 import { jempId } from '../lib/ids.js';
+import { deploySlashCommands } from '../discord/deploy.js';
 import { audit } from '../services/audit.js';
 import { getTimeline, recordTimelineEvent, resolvePublicTimelineShare } from '../services/timeline.js';
 import { AuditAction } from '@prisma/client';
@@ -124,6 +125,27 @@ function rootDashboardHtml(env: Env) {
         <span>/internal/v1/members/:jempId/timeline</span>
         <span class="desc">— Internal member timeline audit events</span>
       </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <span>/internal/v1/commands/deploy</span>
+        <span class="desc">— Deploy latest slash commands to Discord</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+        <h2 style="margin: 0;">Discord Slash Commands</h2>
+        <button id="sync-commands-btn" onclick="syncCommands()" style="background: #a32020; color: #f4f1ed; border: none; border-radius: 6px; padding: 8px 16px; font-weight: 600; cursor: pointer; font-size: 14px; font-family: Inter, system-ui, sans-serif; transition: opacity 0.15s;">
+          ⚡ Sync Slash Commands to Discord
+        </button>
+      </div>
+      <div id="sync-result" style="display: none; padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 14px;"></div>
+      <p style="margin: 0 0 10px 0; color: #bdb3ac; font-size: 14px;">
+        Registered command groups: <code>/jemp</code>, <code>/onboard</code>, <code>/profile</code>, <code>/timeline</code>, <code>/brainstorm</code>, <code>/project</code>, <code>/opportunity</code>, <code>/payroll</code>.
+      </p>
+      <p style="margin: 0; color: #8c827a; font-size: 13px;">
+        💡 Tip: If you just updated commands or don't see them, click <strong>Sync Slash Commands to Discord</strong>, then press <code>Ctrl + R</code> (or <code>Cmd + R</code>) in your Discord desktop client to force-refresh Discord's command autocomplete cache. Admin commands (<code>/jemp</code>, <code>/onboard</code>, <code>/opportunity</code>, <code>/payroll</code>) require Manage Server permissions.
+      </p>
     </div>
 
     <div class="section">
@@ -144,6 +166,39 @@ function rootDashboardHtml(env: Env) {
       <span>Canonical JEMP identity &amp; timeline</span>
     </footer>
   </main>
+  <script>
+    async function syncCommands() {
+      const btn = document.getElementById('sync-commands-btn');
+      const resEl = document.getElementById('sync-result');
+      btn.disabled = true;
+      btn.textContent = 'Syncing commands...';
+      try {
+        const res = await fetch('/internal/v1/commands/deploy', { method: 'POST' });
+        const data = await res.json();
+        resEl.style.display = 'block';
+        if (res.ok && data.status === 'ok') {
+          resEl.style.background = 'rgba(34, 197, 94, 0.15)';
+          resEl.style.color = '#86efac';
+          resEl.style.border = '1px solid #166534';
+          resEl.textContent = '✅ ' + data.message + ' (' + data.scope + (data.guildId ? ': ' + data.guildId : '') + ')! If not visible in Discord yet, press Ctrl+R in Discord to refresh cache.';
+        } else {
+          resEl.style.background = 'rgba(239, 68, 68, 0.15)';
+          resEl.style.color = '#fca5a5';
+          resEl.style.border = '1px solid #991b1b';
+          resEl.textContent = '❌ ' + (data.message || 'Error syncing commands');
+        }
+      } catch (err) {
+        resEl.style.display = 'block';
+        resEl.style.background = 'rgba(239, 68, 68, 0.15)';
+        resEl.style.color = '#fca5a5';
+        resEl.style.border = '1px solid #991b1b';
+        resEl.textContent = '❌ Failed: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⚡ Sync Slash Commands to Discord';
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -177,6 +232,24 @@ export function createInternalApi({ db, env, logger }: { db: PrismaClient; env: 
   });
 
   app.get('/health', async () => ({ status: 'ok', service: 'jemp-timeline-receiver' }));
+
+  app.post('/internal/v1/commands/deploy', async (_request, reply) => {
+    try {
+      const result = await deploySlashCommands(env, logger);
+      return {
+        status: 'ok',
+        message: `Registered ${result.count} JEMP slash command groups`,
+        scope: result.scope,
+        guildId: result.guildId
+      };
+    } catch (error: any) {
+      reply.status(500);
+      return {
+        status: 'error',
+        message: error?.message || 'Failed to deploy slash commands to Discord'
+      };
+    }
+  });
 
   function requireInternalSecret(value: string | string[] | undefined) {
     if (typeof value !== 'string' || !constantTimeEquals(value, env.TIMELINE_SERVICE_SECRET)) throw new DomainError('Internal service authentication failed.', 'UNAUTHORIZED');
