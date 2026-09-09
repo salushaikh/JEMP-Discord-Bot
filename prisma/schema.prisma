@@ -1,0 +1,631 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WAITLISTED
+  REVOKED
+}
+
+enum MembershipStatus {
+  APPLIED
+  APPROVED
+  ELIGIBLE
+  JOINED_UNVERIFIED
+  EMAIL_VERIFIED
+  ONBOARDING
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+  LEFT
+  REJOIN_PENDING
+}
+
+enum TimelineVisibility {
+  PRIVATE
+  MEMBER_ONLY
+  PUBLIC
+}
+
+enum TimelineEventType {
+  MEMBER_JOINED
+  JEMP_ASSIGNED
+  MEMBERSHIP_ACTIVATED
+  BRAINSTORM_JOINED
+  BRAINSTORM_CONTRIBUTION
+  BRAINSTORM_COMPLETED
+  PROJECT_JOINED
+  WORK_UPDATE
+  MILESTONE_COMPLETED
+  PROJECT_REPORT
+  INCIDENT_REPORT
+  PROJECT_COMPLETED
+  OPPORTUNITY_JOINED
+  CLIENT_PROJECT_PARTICIPATION
+  CLIENT_MILESTONE
+  CLIENT_REPORT
+  CLIENT_PROJECT_COMPLETED
+  PAYMENT_VERIFIED
+  PAYMENT_RECEIVED
+  PAYROLL_EVENT
+  PROFILE_UPDATED
+  MEMBERSHIP_STATUS_CHANGED
+}
+
+enum EntityKind {
+  MEMBER
+  BRAINSTORM
+  PROJECT
+  OPPORTUNITY
+  PAYMENT
+  PAYROLL
+  OTHER
+}
+
+enum BrainstormStatus {
+  BRAINSTORMING
+  COOKING
+  PAUSED
+  CANCELLED
+  ITS_ALIVE
+  ARCHIVED
+}
+
+enum BrainstormRole {
+  OWNER
+  CORE_CONTRIBUTOR
+  CONTRIBUTOR
+  ADVISOR
+  OBSERVER
+}
+
+enum ParticipationStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+  LEFT
+}
+
+enum ParticipationApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum ProjectStatus {
+  DRAFT
+  OPEN
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum ProjectRole {
+  OWNER
+  LEAD
+  CONTRIBUTOR
+  REVIEWER
+  OBSERVER
+}
+
+enum OpportunityStatus {
+  DRAFT
+  OPEN
+  REVIEWING
+  ACTIVE
+  CLOSED
+  CANCELLED
+  ARCHIVED
+}
+
+enum OpportunityKind {
+  CLIENT_PROJECT
+  FREELANCE
+  CONTRACT
+  HIRING
+  CONSULTING
+  MAINTENANCE
+  OTHER
+}
+
+enum PaymentStatus {
+  DRAFT
+  INVOICED
+  RECEIVED
+  DISTRIBUTION_PROPOSED
+  DISPUTED
+  APPROVED
+  PAID
+  VOID
+}
+
+enum DistributionVote {
+  PENDING
+  APPROVED
+  NOT_SATISFIED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  WITHDRAWN
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGED
+  ACCESS_CHANGED
+  ROLE_CHANGED
+  APPLICATION_ADDED
+  APPLICATION_REVOKED
+  VERIFIED
+  TIMELINE_RECORDED
+  EXPORT_CREATED
+  SHARE_CREATED
+  SHARE_REVOKED
+  PAYMENT_RECORDED
+  DISTRIBUTION_PROPOSED
+  DISTRIBUTION_VOTED
+  DISPUTE_OPENED
+  DISPUTE_RESOLVED
+  COMMAND_DENIED
+  SECURITY_EVENT
+}
+
+model GuildConfig {
+  id                         String   @id @default(cuid())
+  guildId                    String   @unique
+  verificationCardMessageId  String?
+  verifyChannelId            String?
+  profileChannelId           String?
+  applicationsChannelId      String?
+  onboardingLogChannelId     String?
+  adminLogChannelId          String?
+  botLogChannelId            String?
+  brainstormHubChannelId     String?
+  projectHubChannelId        String?
+  opportunitiesChannelId     String?
+  payrollChannelId           String?
+  unverifiedRoleId           String?
+  memberRoleId               String?
+  suspendedRoleId            String?
+  terminatedRoleId           String?
+  adminRoleId                String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model SystemCounter {
+  key       String   @id
+  nextValue Int      @default(1)
+  updatedAt DateTime @updatedAt
+}
+
+model Application {
+  id                  String            @id @default(cuid())
+  applicationNumber   Int               @unique
+  normalizedEmailHash String            @unique
+  encryptedEmail      String
+  applicantName       String
+  status              ApplicationStatus @default(PENDING)
+  expiresAt           DateTime?
+  notes               String?
+  approvedByDiscordId String?
+  revokedAt           DateTime?
+  member              Member?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model Member {
+  id                  String           @id @default(cuid())
+  jempNumber          Int              @unique
+  discordUserId       String?          @unique
+  discordUsername     String?
+  displayName         String?
+  status              MembershipStatus @default(APPLIED)
+  applicationId       String?          @unique
+  application         Application?     @relation(fields: [applicationId], references: [id])
+  activatedAt         DateTime?
+  joinedAt            DateTime?
+  suspendedAt         DateTime?
+  terminatedAt        DateTime?
+  profile             MemberProfile?
+  timelineEvents      TimelineEvent[]
+  brainstormsOwned    Brainstorm[]     @relation("BrainstormOwner")
+  brainstormMembers   BrainstormMember[]
+  brainstormApps      BrainstormApplication[]
+  projectsOwned       Project[]        @relation("ProjectOwner")
+  projectMembers      ProjectMember[]
+  opportunitiesOwned  Opportunity[]    @relation("OpportunityOwner")
+  opportunityMembers  OpportunityMember[]
+  paymentShares       PaymentShare[]
+  paymentVotes        PaymentVote[]
+  disputesOpened      Dispute[]        @relation("DisputeOpenedBy")
+  auditEvents         AuditEvent[]     @relation("AuditActor")
+  statusTransitions   MembershipTransition[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model MemberProfile {
+  id               String   @id @default(cuid())
+  memberId         String   @unique
+  member           Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  encryptedBio     String?
+  encryptedSkills  String?
+  encryptedResume  String?
+  publicProfile    Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}
+
+model VerificationAttempt {
+  id              String   @id @default(cuid())
+  guildId         String
+  discordUserId   String
+  emailHash       String
+  wasSuccessful   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([guildId, discordUserId, createdAt])
+}
+
+model MembershipTransition {
+  id            String           @id @default(cuid())
+  memberId      String?
+  member        Member?          @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  guildId       String
+  discordUserId String
+  fromStatus    MembershipStatus?
+  toStatus      MembershipStatus
+  reason        String?
+  actorDiscordId String?
+  createdAt     DateTime         @default(now())
+
+  @@index([guildId, discordUserId, createdAt])
+  @@index([memberId, createdAt])
+}
+
+model TimelineEvent {
+  id              String              @id @default(cuid())
+  memberId        String
+  member          Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  type            TimelineEventType
+  title           String
+  summary         String?
+  entityKind      EntityKind?
+  entityExternalId String?
+  entityName      String?
+  source          String
+  idempotencyKey  String
+  occurredAt      DateTime
+  visibility      TimelineVisibility  @default(MEMBER_ONLY)
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+
+  @@unique([source, idempotencyKey])
+  @@index([memberId, occurredAt])
+  @@index([entityKind, entityExternalId])
+}
+
+model TimelineShare {
+  id         String   @id @default(cuid())
+  memberId   String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  @@index([memberId, expiresAt])
+}
+
+model Brainstorm {
+  id              String          @id @default(cuid())
+  brainstormNumber Int            @unique
+  title           String
+  description     String
+  problem         String?
+  direction       String?
+  audience        String?
+  desiredSkills   String[]
+  tags            String[]
+  commitment      String?
+  status          BrainstormStatus @default(BRAINSTORMING)
+  ownerId         String
+  owner           Member          @relation("BrainstormOwner", fields: [ownerId], references: [id])
+  hubMessageId    String?
+  threadId        String?
+  statusReason    String?
+  archivedAt      DateTime?
+  projectId       String?         @unique
+  members         BrainstormMember[]
+  applications    BrainstormApplication[]
+  decisions       BrainstormDecision[]
+  tasks           BrainstormTask[]
+  milestones      BrainstormMilestone[]
+  resources       BrainstormResource[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model BrainstormMember {
+  brainstormId String
+  memberId     String
+  brainstorm   Brainstorm          @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+  member       Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  role         BrainstormRole      @default(CONTRIBUTOR)
+  status       ParticipationStatus @default(ACTIVE)
+  joinedAt     DateTime            @default(now())
+  leftAt       DateTime?
+  reason       String?
+
+  @@id([brainstormId, memberId])
+  @@index([memberId, status])
+}
+
+model BrainstormApplication {
+  id            String                         @id @default(cuid())
+  brainstormId  String
+  memberId      String
+  brainstorm    Brainstorm                     @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+  member        Member                         @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  reason        String
+  contribution  String
+  experience    String?
+  availability  String?
+  portfolioUrl  String?
+  status        ParticipationApplicationStatus @default(PENDING)
+  decisionReason String?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  @@unique([brainstormId, memberId])
+  @@index([status, createdAt])
+}
+
+model BrainstormDecision {
+  id            String     @id @default(cuid())
+  brainstormId  String
+  createdById   String
+  decision      String
+  reason        String?
+  createdAt     DateTime   @default(now())
+  brainstorm    Brainstorm @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+}
+
+model BrainstormTask {
+  id            String     @id @default(cuid())
+  brainstormId  String
+  title         String
+  description   String?
+  assigneeId    String?
+  status        TaskStatus @default(TODO)
+  priority      Int        @default(2)
+  dueAt         DateTime?
+  createdById   String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  brainstorm    Brainstorm @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+
+  @@index([brainstormId, status])
+}
+
+model BrainstormMilestone {
+  id            String     @id @default(cuid())
+  brainstormId  String
+  title         String
+  description   String?
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime   @default(now())
+  brainstorm    Brainstorm @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+}
+
+model BrainstormResource {
+  id            String     @id @default(cuid())
+  brainstormId  String
+  name          String
+  url           String
+  description   String?
+  category      String
+  isPrivate     Boolean    @default(true)
+  createdById   String
+  createdAt     DateTime   @default(now())
+  brainstorm    Brainstorm @relation(fields: [brainstormId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  projectNumber   Int           @unique
+  title           String
+  description     String
+  status          ProjectStatus @default(DRAFT)
+  ownerId         String
+  owner           Member        @relation("ProjectOwner", fields: [ownerId], references: [id])
+  sourceBrainstormId String?    @unique
+  threadId        String?
+  hubMessageId    String?
+  members         ProjectMember[]
+  updates         WorkUpdate[]
+  milestones      ProjectMilestone[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model ProjectMember {
+  projectId      String
+  memberId       String
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member         Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  role           ProjectRole         @default(CONTRIBUTOR)
+  status         ParticipationStatus @default(ACTIVE)
+  joinedAt       DateTime            @default(now())
+  leftAt         DateTime?
+
+  @@id([projectId, memberId])
+}
+
+model WorkUpdate {
+  id            String     @id @default(cuid())
+  projectId     String
+  authorId      String
+  kind          String
+  title         String
+  body          String
+  isImportant   Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectMilestone {
+  id            String     @id @default(cuid())
+  projectId     String
+  title         String
+  description   String?
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime   @default(now())
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Opportunity {
+  id                String            @id @default(cuid())
+  opportunityNumber Int               @unique
+  title             String
+  description       String
+  kind              OpportunityKind
+  status            OpportunityStatus @default(DRAFT)
+  ownerId           String
+  owner             Member            @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  confidential      Boolean           @default(true)
+  channelId         String?
+  members           OpportunityMember[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model OpportunityMember {
+  opportunityId String
+  memberId      String
+  opportunity   Opportunity         @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  member        Member              @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  role          String?
+  status        ParticipationStatus @default(ACTIVE)
+  joinedAt      DateTime            @default(now())
+
+  @@id([opportunityId, memberId])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  paymentNumber     Int           @unique
+  projectId         String?
+  opportunityId     String?
+  currency          String
+  grossMinor        Int
+  adminFeeBps       Int           @default(500)
+  adminFeeMinor     Int
+  workPoolMinor     Int
+  status            PaymentStatus @default(DRAFT)
+  receivedAt        DateTime?
+  rationale         String?
+  shares            PaymentShare[]
+  disputes          Dispute[]
+  createdById       String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model PaymentShare {
+  id             String        @id @default(cuid())
+  paymentId      String
+  memberId       String
+  basisPoints    Int
+  amountMinor    Int
+  rationale      String
+  payment        Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  member         Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  votes          PaymentVote[]
+
+  @@unique([paymentId, memberId])
+}
+
+model PaymentVote {
+  id             String           @id @default(cuid())
+  paymentShareId String
+  memberId       String
+  vote           DistributionVote @default(PENDING)
+  note           String?
+  votedAt        DateTime?
+  paymentShare   PaymentShare     @relation(fields: [paymentShareId], references: [id], onDelete: Cascade)
+  member         Member           @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentShareId, memberId])
+}
+
+model Dispute {
+  id           String        @id @default(cuid())
+  paymentId    String
+  openedById   String
+  status       DisputeStatus @default(OPEN)
+  reason       String
+  resolution   String?
+  resolvedById String?
+  resolvedAt   DateTime?
+  payment      Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  openedBy     Member        @relation("DisputeOpenedBy", fields: [openedById], references: [id])
+  createdAt    DateTime      @default(now())
+}
+
+model AuditEvent {
+  id              String      @id @default(cuid())
+  action          AuditAction
+  actorMemberId   String?
+  actorDiscordId  String?
+  entityKind      EntityKind?
+  entityExternalId String?
+  summary         String
+  before          Json?
+  after           Json?
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  actorMember     Member?     @relation("AuditActor", fields: [actorMemberId], references: [id], onDelete: SetNull)
+
+  @@index([entityKind, entityExternalId, createdAt])
+  @@index([actorDiscordId, createdAt])
+}

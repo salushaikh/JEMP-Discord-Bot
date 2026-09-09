@@ -1,0 +1,98 @@
+import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+
+// Discord cannot dynamically hide slash commands by custom role. `Manage Server` keeps
+// operational commands out of member menus while the runtime guard also accepts ADMIN_ROLE_ID.
+const admin = PermissionFlagsBits.ManageGuild;
+
+export const commandDefinitions = [
+  new SlashCommandBuilder()
+    .setName('jemp')
+    .setDescription('JEMP server operations')
+    .setDefaultMemberPermissions(admin)
+    .addSubcommand((sub) => sub.setName('setup').setDescription('Post or refresh the JEMP verification card'))
+    .addSubcommand((sub) => sub.setName('status').setDescription('View JEMP bot health and configured workflows')),
+  new SlashCommandBuilder()
+    .setName('onboard')
+    .setDescription('JEMP application whitelist operations')
+    .setDefaultMemberPermissions(admin)
+    .addSubcommand((sub) => sub.setName('add').setDescription('Approve or refresh an applicant')
+      .addStringOption((option) => option.setName('email').setDescription('Application email').setRequired(true))
+      .addStringOption((option) => option.setName('name').setDescription('Applicant name').setRequired(true))
+      .addStringOption((option) => option.setName('notes').setDescription('Private staff notes'))
+      .addIntegerOption((option) => option.setName('expires_in_days').setDescription('Optional approval expiry, in days').setMinValue(1).setMaxValue(365)))
+    .addSubcommand((sub) => sub.setName('revoke').setDescription('Revoke an approved application')
+      .addIntegerOption((option) => option.setName('app_number').setDescription('The number in APP#0001').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('reason').setDescription('Private reason'))
+    )
+    .addSubcommand((sub) => sub.setName('search').setDescription('Search applications by APP number')
+      .addIntegerOption((option) => option.setName('app_number').setDescription('The number in APP#0001').setRequired(true).setMinValue(1))),
+  new SlashCommandBuilder()
+    .setName('profile')
+    .setDescription('Your private JEMP profile')
+    .addSubcommand((sub) => sub.setName('me').setDescription('View your JEMP profile and identity'))
+    .addSubcommand((sub) => sub.setName('update').setDescription('Open private profile editor')),
+  new SlashCommandBuilder()
+    .setName('timeline')
+    .setDescription('Your proof-of-work Timeline')
+    .addSubcommand((sub) => sub.setName('view').setDescription('View your Timeline'))
+    .addSubcommand((sub) => sub.setName('share').setDescription('Create a revocable 24-hour public Timeline link'))
+    .addSubcommand((sub) => sub.setName('export').setDescription('Download a view-only Timeline document')),
+  new SlashCommandBuilder()
+    .setName('brainstorm')
+    .setDescription('Brainstorming Club workflows')
+    .addSubcommand((sub) => sub.setName('create').setDescription('Open the Brainstorming Club creation wizard'))
+    .addSubcommand((sub) => sub.setName('apply').setDescription('Apply to contribute to a B#')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in B#001').setRequired(true).setMinValue(1)))
+    .addSubcommand((sub) => sub.setName('review').setDescription('Review a contributor application')
+      .addStringOption((option) => option.setName('application_id').setDescription('Application ID from the manager view').setRequired(true))
+      .addBooleanOption((option) => option.setName('accept').setDescription('Accept the applicant?').setRequired(true))
+      .addStringOption((option) => option.setName('reason').setDescription('Private decision reason')))
+    .addSubcommand((sub) => sub.setName('status').setDescription('Change a B# status with a recorded reason')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in B#001').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('state').setDescription('New state').setRequired(true).addChoices(
+        { name: 'Brainstorming', value: 'BRAINSTORMING' }, { name: 'Cooking', value: 'COOKING' }, { name: 'Paused', value: 'PAUSED' }, { name: 'Cancelled', value: 'CANCELLED' }, { name: "It's Alive", value: 'ITS_ALIVE' }, { name: 'Archived', value: 'ARCHIVED' }
+      ))
+      .addStringOption((option) => option.setName('reason').setDescription('Why this changed').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('convert').setDescription('Convert a B# into a P# project')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in B#001').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('title').setDescription('Optional project title'))),
+  new SlashCommandBuilder()
+    .setName('project')
+    .setDescription('Project management workflows')
+    .addSubcommand((sub) => sub.setName('create').setDescription('Create an official P# project')
+      .addStringOption((option) => option.setName('title').setDescription('Project title').setRequired(true))
+      .addStringOption((option) => option.setName('description').setDescription('Project scope').setRequired(true)))
+    .addSubcommand((sub) => sub.setName('add-member').setDescription('Add an active JEMP member to a P#')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in P#001').setRequired(true).setMinValue(1))
+      .addUserOption((option) => option.setName('member').setDescription('Member to add').setRequired(true))
+      .addStringOption((option) => option.setName('role').setDescription('Project role').addChoices({ name: 'Lead', value: 'LEAD' }, { name: 'Contributor', value: 'CONTRIBUTOR' }, { name: 'Reviewer', value: 'REVIEWER' }, { name: 'Observer', value: 'OBSERVER' })))
+    .addSubcommand((sub) => sub.setName('log').setDescription('Record a meaningful work update, report, or incident')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in P#001').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('kind').setDescription('Entry type').setRequired(true).addChoices({ name: 'Work update', value: 'UPDATE' }, { name: 'Report', value: 'REPORT' }, { name: 'Incident report', value: 'INCIDENT' }))
+      .addStringOption((option) => option.setName('title').setDescription('What changed?').setRequired(true))
+      .addStringOption((option) => option.setName('details').setDescription('Useful, factual detail').setRequired(true))),
+  new SlashCommandBuilder()
+    .setName('opportunity')
+    .setDescription('Client and hiring opportunity workflows')
+    .setDefaultMemberPermissions(admin)
+    .addSubcommand((sub) => sub.setName('create').setDescription('Create an HC# opportunity')
+      .addStringOption((option) => option.setName('title').setDescription('Opportunity title').setRequired(true))
+      .addStringOption((option) => option.setName('description').setDescription('Confidential brief / scope').setRequired(true))
+      .addStringOption((option) => option.setName('kind').setDescription('Opportunity type').setRequired(true).addChoices({ name: 'Client project', value: 'CLIENT_PROJECT' }, { name: 'Freelance', value: 'FREELANCE' }, { name: 'Contract', value: 'CONTRACT' }, { name: 'Hiring', value: 'HIRING' }, { name: 'Consulting', value: 'CONSULTING' }, { name: 'Maintenance', value: 'MAINTENANCE' }, { name: 'Other', value: 'OTHER' })))
+    .addSubcommand((sub) => sub.setName('add-member').setDescription('Add a member to an HC# opportunity')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in HC#001').setRequired(true).setMinValue(1))
+      .addUserOption((option) => option.setName('member').setDescription('Member to add').setRequired(true))
+      .addStringOption((option) => option.setName('role').setDescription('Member role'))),
+  new SlashCommandBuilder()
+    .setName('payroll')
+    .setDescription('Payroll and payment transparency')
+    .setDefaultMemberPermissions(admin)
+    .addSubcommand((sub) => sub.setName('record').setDescription('Record a PAY# receipt')
+      .addStringOption((option) => option.setName('currency').setDescription('ISO code, e.g. INR').setRequired(true))
+      .addIntegerOption((option) => option.setName('gross_minor').setDescription('Total in smallest units, e.g. paise').setRequired(true).setMinValue(1))
+      .addIntegerOption((option) => option.setName('admin_fee_bps').setDescription('Fee basis points; 500 = 5%').setMinValue(0).setMaxValue(10000)))
+    .addSubcommand((sub) => sub.setName('propose').setDescription('Propose a transparent split; shares must total 10,000 bps')
+      .addIntegerOption((option) => option.setName('number').setDescription('The number in PAY#001').setRequired(true).setMinValue(1))
+      .addStringOption((option) => option.setName('shares').setDescription('JEMP#0001:6000:reason;JEMP#0002:4000:reason').setRequired(true))
+      .addStringOption((option) => option.setName('rationale').setDescription('Why this distribution is fair').setRequired(true))),
+].map((command) => command.toJSON());
