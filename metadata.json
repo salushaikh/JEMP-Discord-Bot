@@ -1,0 +1,6 @@
+{
+  "name": "JEMP Discord Bot",
+  "description": "Jobless Empire Discord ecosystem bot and internal timeline API service",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
